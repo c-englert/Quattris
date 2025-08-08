@@ -4,12 +4,25 @@
 <meta charset="utf-8" />
 <title>Tetris – Ícones de 4 bolinhas</title>
 <style>
-  body { margin:0; background:#111; color:#eee; font-family:system-ui, sans-serif; display:flex; gap:24px; justify-content:center; align-items:center; height:100vh; }
-  #game { border:1px solid #333; background:#000; }
-  .panel { min-width:220px; }
-  h1 { margin:0 0 8px; font-size:16px; color:#ccc; }
-  .small { color:#aaa; font-size:13px; line-height:1.4; }
-  code { background:#1b1b1b; padding:2px 6px; border-radius:4px; }
+  body {
+    margin: 0;
+    background: #14171b;
+    color: #eee;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  #game {
+    border: 1px solid #2a2f36;
+    background: transparent; /* fundo pintado via JS */
+  }
+  .panel { min-width: 220px; }
+  h1 { margin: 0 0 8px; font-size: 16px; color: #ccc; }
+  .small { color: #aaa; font-size: 13px; line-height: 1.4; }
+  code { background: #1b1b1b; padding: 2px 6px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -25,9 +38,9 @@
 
 <script>
 /* ===== Config ===== */
-const COLS = 10, ROWS = 20, CELL = 30; // canvas 300x600
-const GRAVITY_MS = 550; // queda automática (ajuste se quiser mais rápido/lento)
-const SOFT_DROP_MS = 40; // ao segurar ↓
+const COLS = 10, ROWS = 20, CELL = 30;
+const GRAVITY_MS = 550;
+const SOFT_DROP_MS = 40;
 const COLORS = {
   CIANO:     "#009CA6",
   LARANJA:   "#F28C28",
@@ -37,42 +50,38 @@ const COLORS = {
   AZUL:      "#001F54"
 };
 
-// As 6 peças segundo os ícones (quatro círculos), definidas por rotações.
-// Cada rotação é uma lista de [x,y] relativos (em células) ao pivot (0,0).
-// Observação: T tem 4 rotações; aqui criamos 3 "tipos" T com mesma família,
-// para manter as 6 entidades/cores que você listou.
 const PIECES = [
   { name:"O", color: COLORS.CIANO,  rotations: [
-    [[0,0],[1,0],[0,1],[1,1]], // O é igual em todas as rotações
+    [[0,0],[1,0],[0,1],[1,1]],
     [[0,0],[1,0],[0,1],[1,1]],
     [[0,0],[1,0],[0,1],[1,1]],
     [[0,0],[1,0],[0,1],[1,1]],
   ]},
-  { name:"J", color: COLORS.LARANJA, rotations: [ // L invertido (3 na horizontal + 1 abaixo na direita)
+  { name:"J", color: COLORS.LARANJA, rotations: [
     [[0,0],[1,0],[2,0],[2,1]],
     [[1,0],[1,1],[1,2],[0,2]],
-    [[0,1],[0,0],[1,1],[2,1]], // pequena variação para manter coerência visual
+    [[0,1],[0,0],[1,1],[2,1]],
     [[0,0],[1,0],[0,1],[0,2]],
   ]},
-  { name:"T1", color: COLORS.VINHO, rotations: [ // T base
-    [[1,0],[0,1],[1,1],[2,1]], // T com haste para baixo
+  { name:"T1", color: COLORS.VINHO, rotations: [
+    [[1,0],[0,1],[1,1],[2,1]],
     [[1,0],[1,1],[2,1],[1,2]],
     [[0,1],[1,1],[2,1],[1,2]],
     [[1,0],[0,1],[1,1],[1,2]],
   ]},
-  { name:"L", color: COLORS.VERDE, rotations: [ // L (vertical 3 + 1 na base à direita)
+  { name:"L", color: COLORS.VERDE, rotations: [
     [[0,0],[0,1],[0,2],[1,2]],
     [[0,1],[1,1],[2,1],[0,0]],
     [[0,0],[1,0],[1,1],[1,2]],
     [[0,1],[1,1],[2,1],[2,2]],
   ]},
-  { name:"T2", color: COLORS.ROXO, rotations: [ // T virado para cima
+  { name:"T2", color: COLORS.ROXO, rotations: [
     [[0,1],[1,1],[2,1],[1,0]],
     [[1,0],[1,1],[1,2],[2,1]],
     [[0,1],[1,1],[2,1],[1,2]],
     [[1,0],[1,1],[1,2],[0,1]],
   ]},
-  { name:"T3", color: COLORS.AZUL, rotations: [ // outra variação T (mesmo conjunto de rotações)
+  { name:"T3", color: COLORS.AZUL, rotations: [
     [[1,0],[0,1],[1,1],[2,1]],
     [[1,0],[1,1],[2,1],[1,2]],
     [[0,1],[1,1],[2,1],[1,2]],
@@ -80,7 +89,7 @@ const PIECES = [
   ]},
 ];
 
-/* ===== Engine simples ===== */
+/* ===== Engine ===== */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const scoreEl = document.getElementById("score");
@@ -88,18 +97,16 @@ const linesEl = document.getElementById("lines");
 
 const board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null;
-let nextDropAt = 0;
 let running = true;
 let score = 0;
 let lines = 0;
 let softDropping = false;
 
-/* Peça atual */
 function newPiece() {
   const p = JSON.parse(JSON.stringify(PIECES[Math.floor(Math.random()*PIECES.length)]));
-  p.r = 0; // índice de rotação
-  p.x = 3; // spawn X (ajuste para centralizar)
-  p.y = 0; // spawn Y
+  p.r = 0;
+  p.x = 3;
+  p.y = 0;
   return p;
 }
 
@@ -122,9 +129,7 @@ function collides(px, py, rIndex) {
 function merge() {
   const shape = current.rotations[current.r];
   for (const [dx,dy] of shape) {
-    const x = current.x + dx;
-    const y = current.y + dy;
-    board[y][x] = current.color;
+    board[current.y + dy][current.x + dx] = current.color;
   }
 }
 
@@ -158,7 +163,7 @@ function tickDown(forceMerge=false) {
       clearLines();
       current = newPiece();
       if (collides(current.x, current.y)) {
-        running = false; // game over
+        running = false;
       }
     }
   }
@@ -166,29 +171,25 @@ function tickDown(forceMerge=false) {
 
 /* ===== Desenho ===== */
 function drawCellCircle(cx, cy, color) {
-  const pad = 2; // margem interna suave
+  const pad = 2;
   const rad = (CELL/2) - pad;
   const px = cx * CELL + CELL/2;
   const py = cy * CELL + CELL/2;
-
-  // glow leve
   ctx.beginPath();
   ctx.arc(px, py, rad, 0, Math.PI*2);
   ctx.fillStyle = color;
   ctx.fill();
-
-  // borda sutil
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
   ctx.stroke();
 }
 
 function render() {
-  // fundo mais claro
-  ctx.fillStyle = "#101216";          // antes ficava transparente/preto via CSS
+  // fundo claro
+  ctx.fillStyle = "#101216";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // grade de fundo (linhas finas + fortes a cada 5 células)
+  // grade
   ctx.lineWidth = 1;
   ctx.strokeStyle = "rgba(255,255,255,0.07)";
   for (let x=0; x<=COLS; x++) {
@@ -197,7 +198,6 @@ function render() {
   for (let y=0; y<=ROWS; y++) {
     ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke();
   }
-  // linhas fortes
   ctx.strokeStyle = "rgba(255,255,255,0.12)";
   for (let x=0; x<=COLS; x+=5) {
     ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke();
@@ -206,7 +206,7 @@ function render() {
     ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke();
   }
 
-  // board
+  // peças fixas
   for (let y=0; y<ROWS; y++) {
     for (let x=0; x<COLS; x++) {
       if (board[y][x]) drawCellCircle(x, y, board[y][x]);
@@ -240,7 +240,6 @@ function loop(ts) {
   if (!running) { render(); return; }
   const dt = ts - last; last = ts;
   dropTimer -= dt;
-
   const target = softDropping ? SOFT_DROP_MS : GRAVITY_MS;
   if (dropTimer <= 0) {
     tickDown();
@@ -253,26 +252,14 @@ function loop(ts) {
 /* ===== Input ===== */
 document.addEventListener("keydown", (e) => {
   if (!running && e.key.toLowerCase() === "r") return restart();
-
   switch (e.key) {
-    case "ArrowLeft":
-      if (!collides(current.x - 1, current.y)) current.x--;
-      break;
-    case "ArrowRight":
-      if (!collides(current.x + 1, current.y)) current.x++;
-      break;
-    case "ArrowDown":
-      softDropping = true;
-      break;
-    case "ArrowUp":
-      rotate(current);
-      break;
-    case " ":
-      hardDrop();
-      break;
+    case "ArrowLeft":  if (!collides(current.x - 1, current.y)) current.x--; break;
+    case "ArrowRight": if (!collides(current.x + 1, current.y)) current.x++; break;
+    case "ArrowDown":  softDropping = true; break;
+    case "ArrowUp":    rotate(current); break;
+    case " ":          hardDrop(); break;
   }
 });
-
 document.addEventListener("keyup", (e) => {
   if (e.key === "ArrowDown") softDropping = false;
 });
