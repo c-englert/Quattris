@@ -184,15 +184,25 @@ function drawCellCircle(cx, cy, color) {
 }
 
 function render() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // fundo mais claro
+  ctx.fillStyle = "#101216";          // antes ficava transparente/preto via CSS
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // grade de fundo
-  ctx.strokeStyle = "#1a1a1a";
+  // grade de fundo (linhas finas + fortes a cada 5 células)
   ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.07)";
   for (let x=0; x<=COLS; x++) {
     ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke();
   }
   for (let y=0; y<=ROWS; y++) {
+    ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke();
+  }
+  // linhas fortes
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  for (let x=0; x<=COLS; x+=5) {
+    ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke();
+  }
+  for (let y=0; y<=ROWS; y+=5) {
     ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke();
   }
 
