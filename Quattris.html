@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Tetris – Ícones de 4 bolinhas</title>
+<style>
+  body { margin:0; background:#111; color:#eee; font-family:system-ui, sans-serif; display:flex; gap:24px; justify-content:center; align-items:center; height:100vh; }
+  #game { border:1px solid #333; background:#000; }
+  .panel { min-width:220px; }
+  h1 { margin:0 0 8px; font-size:16px; color:#ccc; }
+  .small { color:#aaa; font-size:13px; line-height:1.4; }
+  code { background:#1b1b1b; padding:2px 6px; border-radius:4px; }
+</style>
+</head>
+<body>
+  <canvas id="game" width="300" height="600"></canvas>
+  <div class="panel">
+    <h1>Tetris — 4 bolinhas</h1>
+    <div class="small">
+      Peças usadas (cores originais): Ciano, Laranja, Vinho, Verde, Roxo, Azul escuro.<br>
+      Controles: <code>←</code> <code>→</code> mover • <code>↓</code> descer • <code>↑</code> girar • <code>Espaço</code> queda rápida • <code>R</code> reiniciar
+    </div>
+    <p class="small">Linhas: <span id="lines">0</span><br>Pontos: <span id="score">0</span></p>
+  </div>
+
+<script>
+/* ===== Config ===== */
+const COLS = 10, ROWS = 20, CELL = 30; // canvas 300x600
+const GRAVITY_MS = 550; // queda automática (ajuste se quiser mais rápido/lento)
+const SOFT_DROP_MS = 40; // ao segurar ↓
+const COLORS = {
+  CIANO:     "#009CA6",
+  LARANJA:   "#F28C28",
+  VINHO:     "#A0174D",
+  VERDE:     "#3A9932",
+  ROXO:      "#5E2CA5",
+  AZUL:      "#001F54"
+};
+
+// As 6 peças segundo os ícones (quatro círculos), definidas por rotações.
+// Cada rotação é uma lista de [x,y] relativos (em células) ao pivot (0,0).
+// Observação: T tem 4 rotações; aqui criamos 3 "tipos" T com mesma família,
+// para manter as 6 entidades/cores que você listou.
+const PIECES = [
+  { name:"O", color: COLORS.CIANO,  rotations: [
+    [[0,0],[1,0],[0,1],[1,1]], // O é igual em todas as rotações
+    [[0,0],[1,0],[0,1],[1,1]],
+    [[0,0],[1,0],[0,1],[1,1]],
+    [[0,0],[1,0],[0,1],[1,1]],
+  ]},
+  { name:"J", color: COLORS.LARANJA, rotations: [ // L invertido (3 na horizontal + 1 abaixo na direita)
+    [[0,0],[1,0],[2,0],[2,1]],
+    [[1,0],[1,1],[1,2],[0,2]],
+    [[0,1],[0,0],[1,1],[2,1]], // pequena variação para manter coerência visual
+    [[0,0],[1,0],[0,1],[0,2]],
+  ]},
+  { name:"T1", color: COLORS.VINHO, rotations: [ // T base
+    [[1,0],[0,1],[1,1],[2,1]], // T com haste para baixo
+    [[1,0],[1,1],[2,1],[1,2]],
+    [[0,1],[1,1],[2,1],[1,2]],
+    [[1,0],[0,1],[1,1],[1,2]],
+  ]},
+  { name:"L", color: COLORS.VERDE, rotations: [ // L (vertical 3 + 1 na base à direita)
+    [[0,0],[0,1],[0,2],[1,2]],
+    [[0,1],[1,1],[2,1],[0,0]],
+    [[0,0],[1,0],[1,1],[1,2]],
+    [[0,1],[1,1],[2,1],[2,2]],
+  ]},
+  { name:"T2", color: COLORS.ROXO, rotations: [ // T virado para cima
+    [[0,1],[1,1],[2,1],[1,0]],
+    [[1,0],[1,1],[1,2],[2,1]],
+    [[0,1],[1,1],[2,1],[1,2]],
+    [[1,0],[1,1],[1,2],[0,1]],
+  ]},
+  { name:"T3", color: COLORS.AZUL, rotations: [ // outra variação T (mesmo conjunto de rotações)
+    [[1,0],[0,1],[1,1],[2,1]],
+    [[1,0],[1,1],[2,1],[1,2]],
+    [[0,1],[1,1],[2,1],[1,2]],
+    [[1,0],[0,1],[1,1],[1,2]],
+  ]},
+];
+
+/* ===== Engine simples ===== */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const linesEl = document.getElementById("lines");
+
+const board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+let current = null;
+let nextDropAt = 0;
+let running = true;
+let score = 0;
+let lines = 0;
+let softDropping = false;
+
+/* Peça atual */
+function newPiece() {
+  const p = JSON.parse(JSON.stringify(PIECES[Math.floor(Math.random()*PIECES.length)]));
+  p.r = 0; // índice de rotação
+  p.x = 3; // spawn X (ajuste para centralizar)
+  p.y = 0; // spawn Y
+  return p;
+}
+
+function rotate(p) {
+  const next = (p.r + 1) % p.rotations.length;
+  if (!collides(p.x, p.y, next)) p.r = next;
+}
+
+function collides(px, py, rIndex) {
+  const shape = current.rotations[rIndex ?? current.r];
+  for (const [dx,dy] of shape) {
+    const x = px + dx;
+    const y = py + dy;
+    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return true;
+    if (board[y][x]) return true;
+  }
+  return false;
+}
+
+function merge() {
+  const shape = current.rotations[current.r];
+  for (const [dx,dy] of shape) {
+    const x = current.x + dx;
+    const y = current.y + dy;
+    board[y][x] = current.color;
+  }
+}
+
+function clearLines() {
+  let cleared = 0;
+  for (let y = ROWS - 1; y >= 0; y--) {
+    if (board[y].every(cell => cell)) {
+      board.splice(y, 1);
+      board.unshift(Array(COLS).fill(null));
+      cleared++;
+      y++;
+    }
+  }
+  if (cleared) {
+    lines += cleared;
+    score += [0, 100, 250, 500, 800][cleared] || 0;
+  }
+}
+
+function hardDrop() {
+  while (!collides(current.x, current.y + 1)) current.y++;
+  tickDown(true);
+}
+
+function tickDown(forceMerge=false) {
+  if (!collides(current.x, current.y + 1)) {
+    current.y++;
+  } else {
+    if (forceMerge || collides(current.x, current.y + 1)) {
+      merge();
+      clearLines();
+      current = newPiece();
+      if (collides(current.x, current.y)) {
+        running = false; // game over
+      }
+    }
+  }
+}
+
+/* ===== Desenho ===== */
+function drawCellCircle(cx, cy, color) {
+  const pad = 2; // margem interna suave
+  const rad = (CELL/2) - pad;
+  const px = cx * CELL + CELL/2;
+  const py = cy * CELL + CELL/2;
+
+  // glow leve
+  ctx.beginPath();
+  ctx.arc(px, py, rad, 0, Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // borda sutil
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.stroke();
+}
+
+function render() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // grade de fundo
+  ctx.strokeStyle = "#1a1a1a";
+  ctx.lineWidth = 1;
+  for (let x=0; x<=COLS; x++) {
+    ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke();
+  }
+  for (let y=0; y<=ROWS; y++) {
+    ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke();
+  }
+
+  // board
+  for (let y=0; y<ROWS; y++) {
+    for (let x=0; x<COLS; x++) {
+      if (board[y][x]) drawCellCircle(x, y, board[y][x]);
+    }
+  }
+
+  // peça atual
+  if (current) {
+    const shape = current.rotations[current.r];
+    for (const [dx,dy] of shape) {
+      drawCellCircle(current.x + dx, current.y + dy, current.color);
+    }
+  }
+
+  scoreEl.textContent = score;
+  linesEl.textContent = lines;
+
+  if (!running) {
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 22px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Game Over — pressione R para reiniciar", canvas.width/2, canvas.height/2);
+  }
+}
+
+/* ===== Loop ===== */
+let last = 0, dropTimer = GRAVITY_MS;
+function loop(ts) {
+  if (!running) { render(); return; }
+  const dt = ts - last; last = ts;
+  dropTimer -= dt;
+
+  const target = softDropping ? SOFT_DROP_MS : GRAVITY_MS;
+  if (dropTimer <= 0) {
+    tickDown();
+    dropTimer = target;
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ===== Input ===== */
+document.addEventListener("keydown", (e) => {
+  if (!running && e.key.toLowerCase() === "r") return restart();
+
+  switch (e.key) {
+    case "ArrowLeft":
+      if (!collides(current.x - 1, current.y)) current.x--;
+      break;
+    case "ArrowRight":
+      if (!collides(current.x + 1, current.y)) current.x++;
+      break;
+    case "ArrowDown":
+      softDropping = true;
+      break;
+    case "ArrowUp":
+      rotate(current);
+      break;
+    case " ":
+      hardDrop();
+      break;
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  if (e.key === "ArrowDown") softDropping = false;
+});
+
+/* ===== Init ===== */
+function restart() {
+  for (let y=0; y<ROWS; y++) for (let x=0; x<COLS; x++) board[y][x] = null;
+  score = 0; lines = 0; running = true;
+  current = newPiece();
+  dropTimer = GRAVITY_MS; last = 0; softDropping = false;
+  requestAnimationFrame(loop);
+}
+
+current = newPiece();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
