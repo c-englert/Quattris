@@ -6,8 +6,8 @@
 <style>
   body {
     margin: 0;
-    background: var(--body-bg, #14171b);
-    color: #009DA4;
+    background: #009DA4; /* fundo da página */
+    color: #000;
     font-family: system-ui, sans-serif;
     display: flex;
     gap: 24px;
@@ -16,22 +16,13 @@
     height: 100vh;
   }
   #game {
-    border: 1px solid var(--border-color, #2a2f36);
-    background: transparent;
+    border: 1px solid #00005A;
+    background: transparent; /* fundo pintado via JS */
   }
   .panel { min-width: 220px; }
-  h1 { margin: 0 0 8px; font-size: 16px; color: #ccc; }
-  .small { color: #aaa; font-size: 13px; line-height: 1.4; }
-  code { background: #1b1b1b; padding: 2px 6px; border-radius: 4px; }
-  button {
-    margin-top: 10px;
-    padding: 4px 8px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    background: #444;
-    color: #fff;
-  }
+  h1 { margin: 0 0 8px; font-size: 16px; color: #000; }
+  .small { color: #000; font-size: 13px; line-height: 1.4; }
+  code { background: #DBDBDB; padding: 2px 6px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -43,29 +34,9 @@
       Controles: <code>←</code> <code>→</code> mover • <code>↓</code> descer • <code>↑</code> girar • <code>Espaço</code> queda rápida • <code>R</code> reiniciar
     </div>
     <p class="small">Linhas: <span id="lines">0</span><br>Pontos: <span id="score">0</span></p>
-    <button id="toggleTheme">Alternar tema</button>
   </div>
 
 <script>
-/* ===== Temas ===== */
-const THEMES = {
-  dark: {
-    bg: "#101216",
-    gridLight: "rgba(255,255,255,0.07)",
-    gridBold: "rgba(255,255,255,0.12)",
-    border: "#2a2f36",
-    bodyBg: "#14171b"
-  },
-  light: {
-    bg: "#f4f4f4",
-    gridLight: "rgba(0,0,0,0.08)",
-    gridBold: "rgba(0,0,0,0.15)",
-    border: "#999",
-    bodyBg: "#ddd"
-  }
-};
-let currentTheme = "light";
-
 /* ===== Config ===== */
 const COLS = 10, ROWS = 20, CELL = 30;
 const GRAVITY_MS = 550;
@@ -164,22 +135,21 @@ function drawCellCircle(cx, cy, color) {
   ctx.arc(px, py, rad, 0, Math.PI*2);
   ctx.fillStyle = color; ctx.fill();
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.strokeStyle = "rgba(0,0,90,0.2)";
   ctx.stroke();
 }
 function render() {
-  const theme = THEMES[currentTheme];
-  ctx.fillStyle = theme.bg;
+  ctx.fillStyle = "#DBDBDB"; // fundo do grid
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.lineWidth = 1;
-  ctx.strokeStyle = theme.gridLight;
+  ctx.strokeStyle = "rgba(0,0,90,0.15)"; // linhas finas
   for (let x=0; x<=COLS; x++) {
     ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke();
   }
   for (let y=0; y<=ROWS; y++) {
     ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke();
   }
-  ctx.strokeStyle = theme.gridBold;
+  ctx.strokeStyle = "rgba(0,0,90,0.35)"; // linhas fortes
   for (let x=0; x<=COLS; x+=5) {
     ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke();
   }
@@ -238,12 +208,6 @@ function restart() {
   dropTimer = GRAVITY_MS; last = 0; softDropping = false;
   requestAnimationFrame(loop);
 }
-document.getElementById("toggleTheme").addEventListener("click", () => {
-  currentTheme = currentTheme === "dark" ? "light" : "dark";
-  const theme = THEMES[currentTheme];
-  document.body.style.setProperty("--body-bg", theme.bodyBg);
-  document.body.style.setProperty("--border-color", theme.border);
-});
 current = newPiece();
 requestAnimationFrame(loop);
 </script>
