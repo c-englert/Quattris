@@ -1,5 +1,5 @@
 /* Service worker do Quattris — permite instalar e jogar offline. */
-const CACHE = "quattris-v1";
+const CACHE = "quattris-v2";
 const ASSETS = [
   "./",
   "./index.html",
