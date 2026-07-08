@@ -2,6 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#009DA4" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
 
 <title>Quattris – O Tetris da Quattrus</title>
 
@@ -21,41 +25,108 @@
 <meta name="twitter:image" content="https://c-englert.github.io/Quattris/og-image.jpg">
 
 <style>
-  body {
+  * { box-sizing: border-box; }
+  html, body {
     margin: 0;
-    background: #009DA4; /* fundo da página */
+    height: 100%;
+    background: #009DA4;              /* fundo da página */
     color: #000;
     font-family: system-ui, sans-serif;
-    display: flex;
-    gap: 24px;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+    /* impede seleção / zoom / rolagem acidental ao jogar */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    overflow: hidden;
   }
+  #app {
+    height: 100%;
+    height: 100dvh;                  /* usa a altura real do celular */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: max(8px, env(safe-area-inset-top)) 8px
+             max(8px, env(safe-area-inset-bottom)) 8px;
+  }
+  header { text-align: center; }
+  h1 { margin: 0; font-size: 16px; color: #000; }
+  .stats { font-size: 13px; margin-top: 2px; }
+  .stats b { font-weight: 700; }
+
   #game {
     border: 1px solid #00005A;
-    background: transparent; /* fundo pintado via JS */
+    background: transparent;         /* fundo pintado via JS */
+    display: block;
+    touch-action: none;              /* deslizar no tabuleiro = comando, não rolagem */
   }
-  .panel { min-width: 220px; }
-  h1 { margin: 0 0 8px; font-size: 16px; color: #000; }
-  .small { color: #000; font-size: 13px; line-height: 1.4; }
+
+  /* ===== Controles de toque ===== */
+  #touch {
+    display: none;                   /* aparece só em telas com toque */
+    width: 100%;
+    max-width: 460px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  #touch button {
+    appearance: none;
+    border: 1px solid #00005A;
+    background: #DBDBDB;
+    color: #00005A;
+    font-size: 24px;
+    font-weight: 700;
+    padding: 14px 0;
+    border-radius: 12px;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #touch button:active { background: #b9b9b9; }
+  #touch #btnRotate { grid-column: span 2; }
+
+  .hint {
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+    max-width: 460px;
+  }
   code { background: #DBDBDB; padding: 2px 6px; border-radius: 4px; }
+
+  /* Em telas de toque, escondemos a dica de teclado e mostramos os botões */
+  body.touch #touch { display: grid; }
+  body.touch .hint-keys { display: none; }
+  body:not(.touch) .hint-touch { display: none; }
 </style>
 </head>
 <body>
-  <canvas id="game" width="300" height="600"></canvas>
-  <div class="panel">
-    <h1>Quattris — O Tetris da Quattrus</h1>
-    <div class="small">
-      Peças usadas (cores originais): Ciano, Laranja, Vinho, Verde, Roxo, Azul escuro.<br>
-      Controles: <code>←</code> <code>→</code> mover • <code>↓</code> descer • <code>↑</code> girar • <code>Espaço</code> queda rápida • <code>R</code> reiniciar
+  <div id="app">
+    <header>
+      <h1>Quattris — O Tetris da Quattrus</h1>
+      <div class="stats">Linhas: <b id="lines">0</b> &nbsp;•&nbsp; Pontos: <b id="score">0</b></div>
+    </header>
+
+    <canvas id="game"></canvas>
+
+    <div id="touch">
+      <button id="btnLeft"  aria-label="Esquerda">◀</button>
+      <button id="btnRotate" aria-label="Girar">⟳</button>
+      <button id="btnRight" aria-label="Direita">▶</button>
+      <button id="btnDrop"  aria-label="Queda rápida">⤓</button>
     </div>
-    <p class="small">Linhas: <span id="lines">0</span><br>Pontos: <span id="score">0</span></p>
+
+    <div class="hint hint-keys">
+      Controles: <code>←</code> <code>→</code> mover • <code>↓</code> descer • <code>↑</code> girar • <code>Espaço</code> queda • <code>R</code> reiniciar
+    </div>
+    <div class="hint hint-touch">
+      Toque no tabuleiro para <b>girar</b> • deslize <b>◀ ▶</b> para mover • deslize <b>▼</b> para queda rápida • ou use os botões
+    </div>
   </div>
 
 <script>
 /* ===== Config ===== */
-const COLS = 10, ROWS = 20, CELL = 30;
+const COLS = 10, ROWS = 20;
+let CELL = 30;                       /* recalculado conforme a tela */
 const GRAVITY_MS = 550;
 const SOFT_DROP_MS = 40;
 const COLORS = {
@@ -88,6 +159,21 @@ let running = true;
 let score = 0;
 let lines = 0;
 let softDropping = false;
+
+/* ===== Dimensionamento responsivo ===== */
+function resize() {
+  // espaço disponível considerando cabeçalho, botões e dicas
+  const isTouch = document.body.classList.contains("touch");
+  const reservedH = isTouch ? 200 : 120;     // altura ocupada por textos/botões
+  const availW = window.innerWidth - 16;
+  const availH = window.innerHeight - reservedH;
+  const cellW = Math.floor(availW / COLS);
+  const cellH = Math.floor(availH / ROWS);
+  CELL = Math.max(14, Math.min(30, cellW, cellH));
+  canvas.width = COLS * CELL;
+  canvas.height = ROWS * CELL;
+  render();
+}
 
 function newPiece() {
   const p = JSON.parse(JSON.stringify(PIECES[Math.floor(Math.random()*PIECES.length)]));
@@ -181,9 +267,11 @@ function render() {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 22px system-ui, sans-serif";
+    ctx.font = "bold " + Math.max(14, Math.round(CELL*0.6)) + "px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Game Over — pressione R para reiniciar", canvas.width/2, canvas.height/2);
+    ctx.fillText("Game Over", canvas.width/2, canvas.height/2 - 12);
+    ctx.font = Math.max(11, Math.round(CELL*0.45)) + "px system-ui, sans-serif";
+    ctx.fillText("toque / R para reiniciar", canvas.width/2, canvas.height/2 + 14);
   }
 }
 
@@ -202,20 +290,80 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-/* ===== Input ===== */
+/* ===== Ações (usadas por teclado e por toque) ===== */
+function moveLeft()  { if (running && !collides(current.x - 1, current.y)) current.x--; }
+function moveRight() { if (running && !collides(current.x + 1, current.y)) current.x++; }
+function doRotate()  { if (running) rotate(current); }
+
+/* ===== Teclado (computador) ===== */
 document.addEventListener("keydown", (e) => {
   if (!running && e.key.toLowerCase() === "r") return restart();
   switch (e.key) {
-    case "ArrowLeft":  if (!collides(current.x - 1, current.y)) current.x--; break;
-    case "ArrowRight": if (!collides(current.x + 1, current.y)) current.x++; break;
+    case "ArrowLeft":  moveLeft(); break;
+    case "ArrowRight": moveRight(); break;
     case "ArrowDown":  softDropping = true; break;
-    case "ArrowUp":    rotate(current); break;
-    case " ":          hardDrop(); break;
+    case "ArrowUp":    doRotate(); break;
+    case " ":          if (running) hardDrop(); break;
   }
 });
 document.addEventListener("keyup", (e) => {
   if (e.key === "ArrowDown") softDropping = false;
 });
+
+/* ===== Botões na tela (celular) ===== */
+function bindHold(id, action, repeat=false) {
+  const el = document.getElementById(id);
+  let timer = null;
+  const fire = (ev) => {
+    ev.preventDefault();
+    if (!running) { restart(); return; }
+    action();
+    if (repeat) {
+      clearInterval(timer);
+      timer = setInterval(() => running && action(), 110);
+    }
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  el.addEventListener("touchstart", fire, { passive: false });
+  el.addEventListener("touchend", stop);
+  el.addEventListener("touchcancel", stop);
+  el.addEventListener("mousedown", fire);
+  el.addEventListener("mouseup", stop);
+  el.addEventListener("mouseleave", stop);
+}
+bindHold("btnLeft",  moveLeft, true);
+bindHold("btnRight", moveRight, true);
+bindHold("btnRotate", doRotate, false);
+bindHold("btnDrop",  hardDrop, false);
+
+/* ===== Gestos no tabuleiro (deslizar / tocar) ===== */
+let tStartX = 0, tStartY = 0, tLastX = 0, tMoved = false, tTime = 0;
+canvas.addEventListener("touchstart", (e) => {
+  const t = e.touches[0];
+  tStartX = tLastX = t.clientX; tStartY = t.clientY;
+  tMoved = false; tTime = performance.now();
+}, { passive: true });
+
+canvas.addEventListener("touchmove", (e) => {
+  if (!running) return;
+  const t = e.touches[0];
+  const step = CELL;                          // desliza 1 célula por "passo"
+  while (t.clientX - tLastX > step)  { moveRight(); tLastX += step; tMoved = true; }
+  while (tLastX - t.clientX > step)  { moveLeft();  tLastX -= step; tMoved = true; }
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener("touchend", (e) => {
+  if (!running) { restart(); return; }
+  const t = e.changedTouches[0];
+  const dx = t.clientX - tStartX;
+  const dy = t.clientY - tStartY;
+  const dt = performance.now() - tTime;
+  // deslizar para baixo = queda rápida
+  if (dy > 40 && dy > Math.abs(dx)) { hardDrop(); return; }
+  // toque curto sem arrastar = girar
+  if (!tMoved && Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 300) doRotate();
+}, { passive: true });
 
 /* ===== Init ===== */
 function restart() {
@@ -225,6 +373,15 @@ function restart() {
   dropTimer = GRAVITY_MS; last = 0; softDropping = false;
   requestAnimationFrame(loop);
 }
+
+// detecta se é aparelho de toque para mostrar os botões
+if (window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window) {
+  document.body.classList.add("touch");
+}
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", resize);
+
+resize();
 current = newPiece();
 requestAnimationFrame(loop);
 </script>
