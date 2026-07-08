@@ -6,8 +6,16 @@
 <meta name="theme-color" content="#009DA4" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Quattris" />
 
 <title>Quattris – O Tetris da Quattrus</title>
+
+<!-- PWA: manifesto e ícones -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <!-- Meta Open Graph -->
 <meta property="og:type" content="website">
@@ -384,6 +392,13 @@ window.addEventListener("orientationchange", resize);
 resize();
 current = newPiece();
 requestAnimationFrame(loop);
+
+/* ===== PWA: registra o service worker (instalar + jogar offline) ===== */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
